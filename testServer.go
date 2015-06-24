@@ -24,11 +24,10 @@ type Book struct {
 
 const BookKind = "Book"
 const BookRoot = "Book Root"
+const BookMaxPages = 1000
 
 var BookName = []string{"AAA", "BBB", "CCC", "DDD", "EEE", "FFF", "GGG", "HHH", "III", "JJJ"}
 var BookAuthor = []string{"AuthorA", "AuthorB", "AuthorC", "AuthorD", "AuthorE", "AuthorF", "AuthorG", "AuthorH", "AuthorI", "AuthorJ"}
-
-const BookMaxPages = 1000
 
 func init() {
 	rand.Seed(time.Now().Unix())
@@ -43,10 +42,25 @@ func rootPage(rw http.ResponseWriter, req *http.Request) {
 }
 
 func queryAll(rw http.ResponseWriter, req *http.Request) {
-	//
+	// Get all entities
+	var dst []Book
+	c := appengine.NewContext(req)
+	_, err := datastore.NewQuery(BookKind).Order("Pages").GetAll(c, &dst)
+	if err != nil {
+		log.Println(err)
+	}
+
+	// Return
+	encoder := json.NewEncoder(rw)
+	if err = encoder.Encode(dst); err != nil {
+		log.Println(err, "in encoding result", dst)
+	} else {
+		log.Printf("QueryAll() returns %d items\n", len(dst))
+	}
 }
 
 func storeTen(rw http.ResponseWriter, req *http.Request) {
+	// Store 10 random entities
 	r := Result{0}
 	c := appengine.NewContext(req)
 	pKey := datastore.NewKey(c, BookKind, BookRoot, 0, nil)
@@ -64,6 +78,8 @@ func storeTen(rw http.ResponseWriter, req *http.Request) {
 			break
 		}
 	}
+
+	// Return
 	encoder := json.NewEncoder(rw)
 	if err := encoder.Encode(r); err != nil {
 		log.Println(err, "in encoding return code", r.ReturnCode)
@@ -73,5 +89,26 @@ func storeTen(rw http.ResponseWriter, req *http.Request) {
 }
 
 func deleteAll(rw http.ResponseWriter, req *http.Request) {
-	//
+	// Delete root entity after other entities
+	r := Result{0}
+	c := appengine.NewContext(req)
+	pKey := datastore.NewKey(c, BookKind, BookRoot, 0, nil)
+	if keys, err := datastore.NewQuery(BookKind).KeysOnly().GetAll(c, nil); err != nil {
+		log.Println(err)
+		r.ReturnCode = 1
+	} else if err := datastore.DeleteMulti(c, keys); err != nil {
+		log.Println(err)
+		r.ReturnCode = 1
+	} else if err := datastore.Delete(c, pKey); err != nil {
+		log.Println(err)
+		r.ReturnCode = 1
+	}
+
+	// Return
+	encoder := json.NewEncoder(rw)
+	if err := encoder.Encode(r); err != nil {
+		log.Println(err, "in encoding return code", r.ReturnCode)
+	} else {
+		log.Println("DeleteAll() returns", r.ReturnCode)
+	}
 }
