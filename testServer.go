@@ -57,6 +57,9 @@ func queryAll(rw http.ResponseWriter, req *http.Request) {
 	} else {
 		log.Printf("QueryAll() returns %d items\n", len(dst))
 	}
+
+	// Status
+	rw.WriteHeader(http.StatusOK)
 }
 
 func storeTen(rw http.ResponseWriter, req *http.Request) {
@@ -86,6 +89,9 @@ func storeTen(rw http.ResponseWriter, req *http.Request) {
 	} else {
 		log.Println("StoreTen() returns", r.ReturnCode)
 	}
+
+	// Status
+	rw.WriteHeader(http.StatusCreated)
 }
 
 func deleteAll(rw http.ResponseWriter, req *http.Request) {
@@ -111,4 +117,7 @@ func deleteAll(rw http.ResponseWriter, req *http.Request) {
 	} else {
 		log.Println("DeleteAll() returns", r.ReturnCode)
 	}
+
+	// Status
+	rw.WriteHeader(http.StatusOK)
 }
