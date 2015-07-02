@@ -36,10 +36,24 @@ func init() {
 	http.HandleFunc(BaseUrl+"queryAll", queryAll)
 	http.HandleFunc(BaseUrl+"storeTen", storeTen)
 	http.HandleFunc(BaseUrl+"deleteAll", deleteAll)
+	http.HandleFunc(BaseUrl+"books", books)
 }
 
 func rootPage(rw http.ResponseWriter, req *http.Request) {
 	//
+}
+
+func books(rw http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case "GET":
+		queryAll(rw, req)
+	case "POST":
+		storeTen(rw, req)
+	case "DELETE":
+		deleteAll(rw, req)
+	default:
+		queryAll(rw, req)
+	}
 }
 
 func queryAll(rw http.ResponseWriter, req *http.Request) {
