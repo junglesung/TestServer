@@ -6,3 +6,4 @@ api_version: go1
 handlers:
 - url: /api/0.1/.*
   script: _go_app
+  secure: always
