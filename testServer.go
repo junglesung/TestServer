@@ -10,9 +10,9 @@ import (
 	"time"
 )
 
-type Result struct {
-	ReturnCode int `json:"returncode"`
-}
+// type Result struct {
+// 	ReturnCode int `json:"returncode"`
+// }
 
 type Book struct {
 	Name       string    `json:"name"`
@@ -22,6 +22,7 @@ type Book struct {
 	CreateTime time.Time `json:"createtime"`
 }
 
+const BaseUrl = "/api/0.1/"
 const BookKind = "Book"
 const BookRoot = "Book Root"
 const BookMaxPages = 1000
@@ -31,10 +32,10 @@ var BookAuthor = []string{"AuthorA", "AuthorB", "AuthorC", "AuthorD", "AuthorE",
 
 func init() {
 	rand.Seed(time.Now().Unix())
-	http.HandleFunc("/", rootPage)
-	http.HandleFunc("/queryAll", queryAll)
-	http.HandleFunc("/storeTen", storeTen)
-	http.HandleFunc("/deleteAll", deleteAll)
+	http.HandleFunc(BaseUrl, rootPage)
+	http.HandleFunc(BaseUrl+"queryAll", queryAll)
+	http.HandleFunc(BaseUrl+"storeTen", storeTen)
+	http.HandleFunc(BaseUrl+"deleteAll", deleteAll)
 }
 
 func rootPage(rw http.ResponseWriter, req *http.Request) {
@@ -44,27 +45,34 @@ func rootPage(rw http.ResponseWriter, req *http.Request) {
 func queryAll(rw http.ResponseWriter, req *http.Request) {
 	// Get all entities
 	var dst []Book
+	r := 0
 	c := appengine.NewContext(req)
 	_, err := datastore.NewQuery(BookKind).Order("Pages").GetAll(c, &dst)
 	if err != nil {
 		log.Println(err)
+		r = 1
 	}
 
-	// Return
+	// Return status. WriteHeader() must be called before call to Write
+	if r == 0 {
+		rw.WriteHeader(http.StatusOK)
+	} else {
+		http.Error(rw, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
+
+	// Return body
 	encoder := json.NewEncoder(rw)
 	if err = encoder.Encode(dst); err != nil {
 		log.Println(err, "in encoding result", dst)
 	} else {
 		log.Printf("QueryAll() returns %d items\n", len(dst))
 	}
-
-	// Status
-	rw.WriteHeader(http.StatusOK)
 }
 
 func storeTen(rw http.ResponseWriter, req *http.Request) {
 	// Store 10 random entities
-	r := Result{0}
+	r := 0
 	c := appengine.NewContext(req)
 	pKey := datastore.NewKey(c, BookKind, BookRoot, 0, nil)
 	for i := 0; i < 10; i++ {
@@ -77,47 +85,39 @@ func storeTen(rw http.ResponseWriter, req *http.Request) {
 		}
 		if _, err := datastore.Put(c, datastore.NewIncompleteKey(c, BookKind, pKey), &v); err != nil {
 			log.Println(err)
-			r.ReturnCode = 1
+			r = 1
 			break
 		}
 	}
 
-	// Return
-	encoder := json.NewEncoder(rw)
-	if err := encoder.Encode(r); err != nil {
-		log.Println(err, "in encoding return code", r.ReturnCode)
+	// Return status. WriteHeader() must be called before call to Write
+	if r == 0 {
+		rw.WriteHeader(http.StatusCreated)
 	} else {
-		log.Println("StoreTen() returns", r.ReturnCode)
+		http.Error(rw, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 	}
-
-	// Status
-	rw.WriteHeader(http.StatusCreated)
 }
 
 func deleteAll(rw http.ResponseWriter, req *http.Request) {
 	// Delete root entity after other entities
-	r := Result{0}
+	r := 0
 	c := appengine.NewContext(req)
 	pKey := datastore.NewKey(c, BookKind, BookRoot, 0, nil)
 	if keys, err := datastore.NewQuery(BookKind).KeysOnly().GetAll(c, nil); err != nil {
 		log.Println(err)
-		r.ReturnCode = 1
+		r = 1
 	} else if err := datastore.DeleteMulti(c, keys); err != nil {
 		log.Println(err)
-		r.ReturnCode = 1
+		r = 1
 	} else if err := datastore.Delete(c, pKey); err != nil {
 		log.Println(err)
-		r.ReturnCode = 1
+		r = 1
 	}
 
-	// Return
-	encoder := json.NewEncoder(rw)
-	if err := encoder.Encode(r); err != nil {
-		log.Println(err, "in encoding return code", r.ReturnCode)
+	// Return status. WriteHeader() must be called before call to Write
+	if r == 0 {
+		rw.WriteHeader(http.StatusOK)
 	} else {
-		log.Println("DeleteAll() returns", r.ReturnCode)
+		http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
-
-	// Status
-	rw.WriteHeader(http.StatusOK)
 }
