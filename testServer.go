@@ -4,6 +4,7 @@ import (
 	"appengine"
 	"appengine/datastore"
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -48,7 +49,7 @@ func books(rw http.ResponseWriter, req *http.Request) {
 	case "GET":
 		queryAll(rw, req)
 	case "POST":
-		storeTen(rw, req)
+		storeBook(rw, req)
 	case "DELETE":
 		deleteAll(rw, req)
 	default:
@@ -109,6 +110,41 @@ func storeTen(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusCreated)
 	} else {
 		http.Error(rw, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+	}
+}
+
+func storeBook(rw http.ResponseWriter, req *http.Request) {
+	// Result, 0: success, 1: failed
+	r := 0
+	defer func() {
+		// Return status. WriteHeader() must be called before call to Write
+		if r == 0 {
+			rw.WriteHeader(http.StatusCreated)
+		} else {
+			http.Error(rw, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		}
+	}()
+
+	// Get data from body
+	b, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Println(err, "in reading body")
+		r = 1
+		return
+	}
+	var book Book
+	if err = json.Unmarshal(b, &book); err != nil {
+		log.Println(err, "in decoding body")
+		r = 1
+		return
+	}
+
+	// Store book into datastore
+	c := appengine.NewContext(req)
+	pKey := datastore.NewKey(c, BookKind, BookRoot, 0, nil)
+	if _, err := datastore.Put(c, datastore.NewIncompleteKey(c, BookKind, pKey), &book); err != nil {
+		log.Println(err)
+		r = 1
 	}
 }
 
