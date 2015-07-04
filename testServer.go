@@ -35,6 +35,7 @@ func init() {
 	rand.Seed(time.Now().Unix())
 	http.HandleFunc(BaseUrl, rootPage)
 	http.HandleFunc(BaseUrl+"queryAll", queryAll)
+	http.HandleFunc(BaseUrl+"queryAllWithKey", queryAllWithKey)
 	http.HandleFunc(BaseUrl+"storeTen", storeTen)
 	http.HandleFunc(BaseUrl+"deleteAll", deleteAll)
 	http.HandleFunc(BaseUrl+"books", books)
@@ -47,7 +48,7 @@ func rootPage(rw http.ResponseWriter, req *http.Request) {
 func books(rw http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case "GET":
-		queryAll(rw, req)
+		queryAllWithKey(rw, req)
 	case "POST":
 		storeBook(rw, req)
 	case "DELETE":
@@ -82,6 +83,41 @@ func queryAll(rw http.ResponseWriter, req *http.Request) {
 		log.Println(err, "in encoding result", dst)
 	} else {
 		log.Printf("QueryAll() returns %d items\n", len(dst))
+	}
+}
+
+func queryAllWithKey(rw http.ResponseWriter, req *http.Request) {
+	// Get all entities
+	var dst []Book
+	r := 0
+	c := appengine.NewContext(req)
+	k, err := datastore.NewQuery(BookKind).Order("Pages").GetAll(c, &dst)
+	if err != nil {
+		log.Println(err)
+		r = 1
+	}
+
+	// Map keys and books
+	var m map[string]*Book
+	m = make(map[string]*Book)
+	for i := range k {
+		m[k[i].Encode()] = &dst[i]
+	}
+
+	// Return status. WriteHeader() must be called before call to Write
+	if r == 0 {
+		rw.WriteHeader(http.StatusOK)
+	} else {
+		http.Error(rw, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
+
+	// Return body
+	encoder := json.NewEncoder(rw)
+	if err = encoder.Encode(m); err != nil {
+		log.Println(err, "in encoding result", m)
+	} else {
+		log.Printf("QueryAll() returns %d items\n", len(m))
 	}
 }
 
