@@ -8,6 +8,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -38,6 +39,7 @@ func init() {
 	http.HandleFunc(BaseUrl+"queryAllWithKey", queryAllWithKey)
 	http.HandleFunc(BaseUrl+"storeTen", storeTen)
 	http.HandleFunc(BaseUrl+"deleteAll", deleteAll)
+	http.HandleFunc(BaseUrl+"deleteBook/", deleteBook)
 	http.HandleFunc(BaseUrl+"books", books)
 }
 
@@ -52,7 +54,7 @@ func books(rw http.ResponseWriter, req *http.Request) {
 	case "POST":
 		storeBook(rw, req)
 	case "DELETE":
-		deleteAll(rw, req)
+		deleteBook(rw, req)
 	default:
 		queryAll(rw, req)
 	}
@@ -151,10 +153,13 @@ func storeTen(rw http.ResponseWriter, req *http.Request) {
 
 func storeBook(rw http.ResponseWriter, req *http.Request) {
 	// Result, 0: success, 1: failed
-	r := 0
+	var r int = 0
+	var cKey *datastore.Key = nil
 	defer func() {
 		// Return status. WriteHeader() must be called before call to Write
 		if r == 0 {
+			// Changing the header after a call to WriteHeader (or Write) has no effect.
+			rw.Header().Set("Location", req.URL.String()+"/"+cKey.Encode())
 			rw.WriteHeader(http.StatusCreated)
 		} else {
 			http.Error(rw, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -178,9 +183,11 @@ func storeBook(rw http.ResponseWriter, req *http.Request) {
 	// Store book into datastore
 	c := appengine.NewContext(req)
 	pKey := datastore.NewKey(c, BookKind, BookRoot, 0, nil)
-	if _, err := datastore.Put(c, datastore.NewIncompleteKey(c, BookKind, pKey), &book); err != nil {
+	cKey, err = datastore.Put(c, datastore.NewIncompleteKey(c, BookKind, pKey), &book)
+	if err != nil {
 		log.Println(err)
 		r = 1
+		return
 	}
 }
 
@@ -206,4 +213,52 @@ func deleteAll(rw http.ResponseWriter, req *http.Request) {
 	} else {
 		http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
+}
+
+func deleteBook(rw http.ResponseWriter, req *http.Request) {
+	// Result
+	r := http.StatusNoContent
+	defer func() {
+		// Return status. WriteHeader() must be called before call to Write
+		if r == http.StatusNoContent {
+			rw.WriteHeader(http.StatusNoContent)
+		} else {
+			http.Error(rw, http.StatusText(r), r)
+		}
+	}()
+
+	// Get key from URL
+	tokens := strings.Split(req.URL.Path, "/")
+	var keyIndexInTokens int = 0
+	for i, v := range tokens {
+		if v == "deleteBook" {
+			keyIndexInTokens = i + 1
+		}
+	}
+	if keyIndexInTokens >= len(tokens) {
+		log.Println("Key is not given")
+		r = http.StatusBadRequest
+		return
+	}
+	keyString := tokens[keyIndexInTokens]
+	if keyString == "" {
+		log.Println("Key is empty so that delete all books")
+		deleteAll(rw, req)
+		return
+	}
+	key, err := datastore.DecodeKey(keyString)
+	if err != nil {
+		log.Println(err, "in decoding key string")
+		r = http.StatusBadRequest
+		return
+	}
+
+	// Delete the entity
+	c := appengine.NewContext(req)
+	if err := datastore.Delete(c, key); err != nil {
+		log.Println(err, "in deleting entity by key")
+		r = http.StatusNotFound
+		return
+	}
+	log.Println(key, "is deleted")
 }
