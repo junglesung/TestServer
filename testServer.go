@@ -39,7 +39,6 @@ func init() {
 	http.HandleFunc(BaseUrl+"queryAllWithKey", queryAllWithKey)
 	http.HandleFunc(BaseUrl+"storeTen", storeTen)
 	http.HandleFunc(BaseUrl+"deleteAll", deleteAll)
-	http.HandleFunc(BaseUrl+"deleteBook/", deleteBook)
 	http.HandleFunc(BaseUrl+"books", books)
 }
 
@@ -50,7 +49,7 @@ func rootPage(rw http.ResponseWriter, req *http.Request) {
 func books(rw http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case "GET":
-		queryAllWithKey(rw, req)
+		queryBook(rw, req)
 	case "POST":
 		storeBook(rw, req)
 	case "DELETE":
@@ -88,6 +87,14 @@ func queryAll(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func queryBook(rw http.ResponseWriter, req *http.Request) {
+	if len(req.URL.Query()) == 0 {
+		queryAllWithKey(rw, req)
+	} else {
+		searchBook(rw, req)
+	}
+}
+
 func queryAllWithKey(rw http.ResponseWriter, req *http.Request) {
 	// Get all entities
 	var dst []Book
@@ -120,6 +127,47 @@ func queryAllWithKey(rw http.ResponseWriter, req *http.Request) {
 		log.Println(err, "in encoding result", m)
 	} else {
 		log.Printf("QueryAll() returns %d items\n", len(m))
+	}
+}
+
+func searchBook(rw http.ResponseWriter, req *http.Request) {
+
+	// Get all entities
+	var dst []Book
+	r := 0
+	q := req.URL.Query()
+	f := datastore.NewQuery(BookKind)
+	for key := range q {
+		f = f.Filter(key+"=", q.Get(key))
+	}
+	c := appengine.NewContext(req)
+	k, err := f.GetAll(c, &dst)
+	if err != nil {
+		log.Println(err)
+		r = 1
+	}
+
+	// Map keys and books
+	var m map[string]*Book
+	m = make(map[string]*Book)
+	for i := range k {
+		m[k[i].Encode()] = &dst[i]
+	}
+
+	// Return status. WriteHeader() must be called before call to Write
+	if r == 0 {
+		rw.WriteHeader(http.StatusOK)
+	} else {
+		http.Error(rw, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
+
+	// Return body
+	encoder := json.NewEncoder(rw)
+	if err = encoder.Encode(m); err != nil {
+		log.Println(err, "in encoding result", m)
+	} else {
+		log.Printf("SearchBook() returns %d items\n", len(m))
 	}
 }
 
@@ -191,6 +239,29 @@ func storeBook(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func deleteBook(rw http.ResponseWriter, req *http.Request) {
+	// Get key from URL
+	tokens := strings.Split(req.URL.Path, "/")
+	var keyIndexInTokens int = 0
+	for i, v := range tokens {
+		if v == "books" {
+			keyIndexInTokens = i + 1
+		}
+	}
+	if keyIndexInTokens >= len(tokens) {
+		log.Println("Key is not given so that delete all books")
+		deleteAll(rw, req)
+		return
+	}
+	keyString := tokens[keyIndexInTokens]
+	if keyString == "" {
+		log.Println("Key is empty so that delete all books")
+		deleteAll(rw, req)
+	} else {
+		deleteOneBook(rw, req, keyString)
+	}
+}
+
 func deleteAll(rw http.ResponseWriter, req *http.Request) {
 	// Delete root entity after other entities
 	r := 0
@@ -215,7 +286,7 @@ func deleteAll(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func deleteBook(rw http.ResponseWriter, req *http.Request) {
+func deleteOneBook(rw http.ResponseWriter, req *http.Request, keyString string) {
 	// Result
 	r := http.StatusNoContent
 	defer func() {
@@ -227,25 +298,6 @@ func deleteBook(rw http.ResponseWriter, req *http.Request) {
 		}
 	}()
 
-	// Get key from URL
-	tokens := strings.Split(req.URL.Path, "/")
-	var keyIndexInTokens int = 0
-	for i, v := range tokens {
-		if v == "deleteBook" {
-			keyIndexInTokens = i + 1
-		}
-	}
-	if keyIndexInTokens >= len(tokens) {
-		log.Println("Key is not given")
-		r = http.StatusBadRequest
-		return
-	}
-	keyString := tokens[keyIndexInTokens]
-	if keyString == "" {
-		log.Println("Key is empty so that delete all books")
-		deleteAll(rw, req)
-		return
-	}
 	key, err := datastore.DecodeKey(keyString)
 	if err != nil {
 		log.Println(err, "in decoding key string")
