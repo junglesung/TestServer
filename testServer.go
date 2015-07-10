@@ -131,7 +131,6 @@ func queryAllWithKey(rw http.ResponseWriter, req *http.Request) {
 }
 
 func searchBook(rw http.ResponseWriter, req *http.Request) {
-
 	// Get all entities
 	var dst []Book
 	r := 0
